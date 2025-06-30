@@ -86,6 +86,11 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         # Initialize tokenizer and model
         self.tokenizer = T5Tokenizer.from_pretrained(model_name)
         
+        # FIX T5 tokenizer issues
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            print(f"Set pad_token to: {self.tokenizer.pad_token}")
+        
         # Add special tokens
         if domain_special_tokens is None:
             domain_special_tokens = [
@@ -97,6 +102,8 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         special_tokens_dict = {'additional_special_tokens': domain_special_tokens}
         num_added_toks = self.tokenizer.add_special_tokens(special_tokens_dict)
         print(f"Added {num_added_toks} special tokens")
+        print(f"Tokenizer pad_token_id: {self.tokenizer.pad_token_id}")
+        print(f"Tokenizer eos_token_id: {self.tokenizer.eos_token_id}")
         
         # Load model and resize embeddings
         self.model = T5ForConditionalGeneration.from_pretrained(model_name)
@@ -110,12 +117,8 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         self.label_smoothing = label_smoothing
         self.ignore_pad_token_for_loss = ignore_pad_token_for_loss
         
-        # Set up loss function like REBEL
-        if self.label_smoothing == 0:
-            self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-100)
-        else:
-            # Will use label smoothed loss manually
-            self.loss_fn = None
+        # Set up loss function - simpler approach for T5
+        self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-100)
         
         # For tracking
         self.training_step_outputs = []
@@ -142,7 +145,7 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         return loss, nll_loss
 
     def forward(self, input_ids, attention_mask, labels=None):
-        """Forward pass - T5 automatically handles decoder_input_ids when labels provided"""
+        """Simple T5 forward pass - let T5 handle everything first"""
         if labels is None:
             # Generation mode
             return self.model(
@@ -150,42 +153,17 @@ class ViT5LegalExtractionModel(pl.LightningModule):
                 attention_mask=attention_mask
             )
         
-        # Training mode - T5 automatically creates decoder_input_ids from labels
-        if self.label_smoothing == 0:
-            # Standard loss - let T5 handle everything
-            outputs = self.model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                labels=labels,
-                return_dict=True
-            )
-            loss = outputs.loss
-            logits = outputs.logits
-        else:
-            # Label smoothing - still let T5 create decoder_input_ids but compute custom loss
-            outputs = self.model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                labels=labels,  # T5 will create decoder_input_ids internally
-                return_dict=True
-            )
-            logits = outputs.logits
-            
-            # Apply label smoothing
-            lprobs = torch.nn.functional.log_softmax(logits, dim=-1)
-            
-            # Replace -100 with pad_token_id for loss computation
-            labels_for_loss = labels.clone()
-            labels_for_loss.masked_fill_(labels_for_loss == -100, self.tokenizer.pad_token_id)
-            
-            loss, _ = self.label_smoothed_nll_loss(
-                lprobs, labels_for_loss, self.label_smoothing, 
-                ignore_index=self.tokenizer.pad_token_id
-            )
+        # Training mode - use T5's built-in loss computation
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+            return_dict=True
+        )
         
         return {
-            'loss': loss,
-            'logits': logits
+            'loss': outputs.loss,
+            'logits': outputs.logits
         }
     
     def training_step(self, batch, batch_idx):
@@ -201,7 +179,7 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         )
         
         loss = outputs['loss']
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
         
         self.training_step_outputs.append(loss.detach())
         return loss
@@ -217,22 +195,26 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         )
         
         loss = outputs['loss']
-        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         
         self.validation_step_outputs.append(loss.detach())
         return loss
     
     def on_train_epoch_end(self):
         avg_loss = torch.stack(self.training_step_outputs).mean()
-        print(f"\nTrain Epoch {self.current_epoch} - Average Loss: {avg_loss:.4f}")
+        # Only print on rank 0 to avoid duplicate output
+        if self.trainer.is_global_zero:
+            print(f"\nTrain Epoch {self.current_epoch} - Average Loss: {avg_loss:.4f}")
         self.training_step_outputs.clear()
         
-        # Generate sample after each epoch
-        self.generate_sample()
+        # Generate sample after each epoch - only on rank 0
+        if self.trainer.is_global_zero:
+            self.generate_sample()
     
     def on_validation_epoch_end(self):
         avg_loss = torch.stack(self.validation_step_outputs).mean()
-        print(f"Val Epoch {self.current_epoch} - Average Loss: {avg_loss:.4f}")
+        if self.trainer.is_global_zero:
+            print(f"Val Epoch {self.current_epoch} - Average Loss: {avg_loss:.4f}")
         self.validation_step_outputs.clear()
     
     def configure_optimizers(self):
@@ -329,7 +311,7 @@ class ViT5LegalExtractionModel(pl.LightningModule):
             },
             {
                 "input": "Nghị định 52/2021/NĐ-CP của Chính phủ quy định chi tiết thi hành một số điều của Luật An toàn thông tin mạng. Nghị định này có hiệu lực từ ngày 01/10/2021 và áp dụng tại toàn bộ lãnh thổ Việt Nam.",
-                "expected": "<LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <LEGAL_PROVISION> Luật An toàn thông tin mạng <Relates_To> <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <DATE/TIME> 01/10/2021 <Effective_From> <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <LOCATION> Việt Nam <Applicable_In>"
+                "expected": "<LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <LEGAL_PROVISION> Luật An toàn thông tin mạng <Relates_To> <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <DATE/TIME> 01/10/2021 <Effective_From> <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <LOCATION> Việt Nam <Applicable_In> <ORGANIZATION> Bộ Thông tin và Truyền thông <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <Relates_To>"
             }
         ]
         
@@ -363,9 +345,15 @@ class ViT5LegalExtractionModel(pl.LightningModule):
                     input_ids=inputs['input_ids'],
                     attention_mask=inputs['attention_mask'],
                     max_length=256,
-                    num_beams=3,
+                    min_length=10,
+                    num_beams=4,
                     early_stopping=True,
-                    do_sample=False
+                    do_sample=False,
+                    no_repeat_ngram_size=2,  # Prevent repetition
+                    repetition_penalty=1.2,   # Penalize repetition
+                    length_penalty=1.0,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id
                 )
             
             generated_text = self.tokenizer.decode(generated_ids[0], skip_special_tokens=False)
@@ -442,7 +430,7 @@ def main():
         'finetune_file_name': "dataset.json",
         'model_name': "VietAI/vit5-base",
         'batch_size': 8,
-        'learning_rate': 3e-4,
+        'learning_rate': 5e-5,  # Lower LR - T5 needs smaller LR than BART
         'max_epochs': 10,
         'max_steps': 10000,
         'warmup_steps': 1000,
@@ -453,9 +441,9 @@ def main():
         'accumulate_grad_batches': 4,
         'precision': 16,  # Mixed precision
         'num_workers': 2,
-        # REBEL-style loss improvements
-        'label_smoothing': 0.1,  # Label smoothing like REBEL
-        'ignore_pad_token_for_loss': True  # Ignore padding tokens in loss
+        # Start simple - add complexity later
+        'label_smoothing': 0.0,  # Disable label smoothing first
+        'ignore_pad_token_for_loss': True
     }
     
     # Special tokens for Vietnamese legal domain
