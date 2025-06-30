@@ -186,39 +186,143 @@ class ViT5LegalExtractionModel(pl.LightningModule):
             },
         }
     
+    def parse_relations_output(self, relations_text: str):
+        """Parse generated relations into structured format"""
+        relations = []
+        parts = relations_text.split('<')
+        
+        current_triplet = {}
+        entity_type = None
+        entity_text = ""
+        relation_type = None
+        
+        for part in parts:
+            if not part:
+                continue
+                
+            part = '<' + part
+            
+            # Check for entity types
+            if any(token in part for token in ["<ORGANIZATION>", "<LOCATION>", "<DATE/TIME>", "<LEGAL_PROVISION>"]):
+                if entity_type and entity_text and relation_type:
+                    # Complete previous triplet
+                    current_triplet['tail_type'] = entity_type.replace('<', '').replace('>', '')
+                    current_triplet['tail'] = entity_text.strip()
+                    current_triplet['relation'] = relation_type.replace('<', '').replace('>', '')
+                    relations.append(current_triplet.copy())
+                    current_triplet = {}
+                
+                # Extract entity type and text
+                for token in ["<ORGANIZATION>", "<LOCATION>", "<DATE/TIME>", "<LEGAL_PROVISION>"]:
+                    if token in part:
+                        entity_type = token
+                        entity_text = part.replace(token, '').strip()
+                        if not current_triplet.get('head_type'):
+                            current_triplet['head_type'] = entity_type.replace('<', '').replace('>', '')
+                            current_triplet['head'] = entity_text
+                        break
+            
+            # Check for relation types
+            elif any(rel in part for rel in ["<Effective_From>", "<Applicable_In>", "<Relates_To>", "<Amended_By>"]):
+                for rel in ["<Effective_From>", "<Applicable_In>", "<Relates_To>", "<Amended_By>"]:
+                    if rel in part:
+                        relation_type = rel
+                        break
+        
+        # Handle last triplet
+        if entity_type and entity_text and relation_type:
+            current_triplet['tail_type'] = entity_type.replace('<', '').replace('>', '')
+            current_triplet['tail'] = entity_text.strip()
+            current_triplet['relation'] = relation_type.replace('<', '').replace('>', '')
+            relations.append(current_triplet)
+        
+        return relations
+
     def generate_sample(self):
-        """Generate sample to check model progress"""
+        """Generate sample to check model progress with multiple test cases"""
         self.model.eval()
         
-        # Sample input text
-        sample_text = "extract relations: Điều 5 Nghị định 15/2020/NĐ-CP quy định về tổ chức và hoạt động của Ủy ban nhân dân xã, phường, thị trấn. Ủy ban nhân dân có trách nhiệm thực hiện các nhiệm vụ được giao."
+        # Multiple test samples from the dataset
+        test_samples = [
+            {
+                "input": "Điều 2 01/2014/NQLT/CP-UBTƯMTTQVN hướng dẫn phối hợp thực hiện một số quy định của pháp luật về hòa giải ở cơ sở Nguyên tắc phối hợp 1. Việc phối hợp hoạt động được thực hiện trên cơ sở chức năng, nhiệm vụ, quyền hạn, bảo đảm vai trò, trách nhiệm của mỗi cơ quan, tổ chức. 2. Phát huy vai trò nòng cốt của Mặt trận Tổ quốc Việt Nam và các tổ chức thành viên của Mặt trận; tăng cường tính chủ động, tích cực của mỗi cơ quan, tổ chức trong công tác hòa giải ở cơ sở.",
+                "expected": "<LEGAL_PROVISION> Điều 2 01/2014/NQLT/CP-UBTƯMTTQVN <ORGANIZATION> Mặt trận Tổ quốc Việt Nam <Relates_To>"
+            },
+            {
+                "input": "Nghị định 52/2021/NĐ-CP của Chính phủ quy định chi tiết thi hành một số điều của Luật An toàn thông tin mạng. Nghị định này có hiệu lực từ ngày 01/10/2021 và áp dụng tại toàn bộ lãnh thổ Việt Nam.",
+                "expected": "<LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <LEGAL_PROVISION> Luật An toàn thông tin mạng <Relates_To> <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <DATE/TIME> 01/10/2021 <Effective_From> <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <LOCATION> Việt Nam <Applicable_In>"
+            }
+        ]
         
-        inputs = self.tokenizer(
-            sample_text,
-            max_length=512,
-            padding='max_length',
-            truncation=True,
-            return_tensors='pt'
-        ).to(self.device)
+        print(f"\n{'🔥'*50}")
+        print(f"🧠 EPOCH {self.current_epoch} - MODEL GENERATION TESTING 🧠")
+        print(f"{'🔥'*50}")
         
-        with torch.no_grad():
-            generated_ids = self.model.generate(
-                input_ids=inputs['input_ids'],
-                attention_mask=inputs['attention_mask'],
-                max_length=256,
-                num_beams=3,
-                early_stopping=True,
-                do_sample=False
-            )
+        for i, sample in enumerate(test_samples):
+            print(f"\n{'='*80}")
+            print(f"📋 TEST CASE {i+1}")
+            print(f"{'='*80}")
+            
+            input_text = "extract relations: " + sample["input"]
+            expected = sample["expected"]
+            
+            # Truncate long input for display
+            display_input = sample["input"][:150] + "..." if len(sample["input"]) > 150 else sample["input"]
+            print(f"📝 INPUT: {display_input}")
+            
+            # Generate
+            inputs = self.tokenizer(
+                input_text,
+                max_length=512,
+                padding='max_length',
+                truncation=True,
+                return_tensors='pt'
+            ).to(self.device)
+            
+            with torch.no_grad():
+                generated_ids = self.model.generate(
+                    input_ids=inputs['input_ids'],
+                    attention_mask=inputs['attention_mask'],
+                    max_length=256,
+                    num_beams=3,
+                    early_stopping=True,
+                    do_sample=False
+                )
+            
+            generated_text = self.tokenizer.decode(generated_ids[0], skip_special_tokens=False)
+            generated_text = generated_text.replace('<pad>', '').replace('</s>', '').strip()
+            
+            print(f"\n🎯 EXPECTED: {expected}")
+            print(f"🤖 GENERATED: {generated_text}")
+            
+            # Parse and display structured relations
+            generated_relations = self.parse_relations_output(generated_text)
+            expected_relations = self.parse_relations_output(expected)
+            
+            print(f"\n📊 PARSED RELATIONS:")
+            print(f"Expected ({len(expected_relations)} relations):")
+            for j, rel in enumerate(expected_relations):
+                print(f"  ✅ {j+1}. [{rel.get('head_type', '?')}] {rel.get('head', '?')} --[{rel.get('relation', '?')}]--> [{rel.get('tail_type', '?')}] {rel.get('tail', '?')}")
+            
+            print(f"\nGenerated ({len(generated_relations)} relations):")
+            for j, rel in enumerate(generated_relations):
+                print(f"  🤖 {j+1}. [{rel.get('head_type', '?')}] {rel.get('head', '?')} --[{rel.get('relation', '?')}]--> [{rel.get('tail_type', '?')}] {rel.get('tail', '?')}")
+            
+            # Simple accuracy check
+            if generated_text.strip() == expected.strip():
+                print(f"\n🎉 PERFECT MATCH!")
+            elif len(generated_relations) == len(expected_relations):
+                print(f"\n✅ SAME NUMBER OF RELATIONS")
+            elif len(generated_relations) > 0:
+                print(f"\n⚠️ PARTIAL GENERATION")
+            else:
+                print(f"\n❌ NO RELATIONS GENERATED")
+            
+            print(f"{'─'*80}")
         
-        generated_text = self.tokenizer.decode(generated_ids[0], skip_special_tokens=False)
-        generated_text = generated_text.replace('<pad>', '').replace('</s>', '').strip()
-        
-        print(f"\n{'='*80}")
-        print(f"EPOCH {self.current_epoch} - SAMPLE GENERATION:")
-        print(f"Input: {sample_text}")
-        print(f"Generated: {generated_text}")
-        print(f"{'='*80}\n")
+        print(f"\n{'🎯'*50}")
+        print(f"🧠 END OF EPOCH {self.current_epoch} TESTING 🧠")
+        print(f"{'🎯'*50}\n")
         
         self.model.train()
 
@@ -258,7 +362,7 @@ def main():
         'data_path': "/kaggle/input/vietnamese-legal-finetune-dataset",
         'finetune_file_name': "dataset.json",
         'model_name': "VietAI/vit5-base",
-        'batch_size': 4,
+        'batch_size': 16,
         'learning_rate': 3e-4,
         'max_epochs': 10,
         'max_steps': 10000,
@@ -267,7 +371,7 @@ def main():
         'max_target_length': 256,
         'weight_decay': 0.01,
         'gradient_clip_val': 1.0,
-        'accumulate_grad_batches': 4,
+        'accumulate_grad_batches': 2,
         'precision': 16,  # Mixed precision
         'num_workers': 2
     }
