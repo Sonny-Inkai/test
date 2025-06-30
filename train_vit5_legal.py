@@ -479,7 +479,6 @@ def main():
     # Initialize trainer
     trainer = pl.Trainer(
         max_epochs=config.num_epochs,
-        gpus=1 if torch.cuda.is_available() else 0,
         callbacks=[checkpoint_callback, early_stop_callback],
         logger=logger,
         gradient_clip_val=config.gradient_clip_val,
