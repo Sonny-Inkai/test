@@ -142,45 +142,36 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         return loss, nll_loss
 
     def forward(self, input_ids, attention_mask, labels=None):
-        """Forward pass with proper loss computation like REBEL"""
+        """Forward pass - T5 automatically handles decoder_input_ids when labels provided"""
         if labels is None:
+            # Generation mode
             return self.model(
                 input_ids=input_ids,
                 attention_mask=attention_mask
             )
         
-        # Proper loss computation like REBEL
+        # Training mode - T5 automatically creates decoder_input_ids from labels
         if self.label_smoothing == 0:
-            if self.ignore_pad_token_for_loss:
-                # Manual loss computation ignoring pad tokens
-                outputs = self.model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    use_cache=False,
-                    return_dict=True
-                )
-                logits = outputs.logits
-                loss = self.loss_fn(logits.view(-1, logits.shape[-1]), labels.view(-1))
-            else:
-                # Use model's built-in loss
-                outputs = self.model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    labels=labels,
-                    use_cache=False,
-                    return_dict=True
-                )
-                loss = outputs.loss
-                logits = outputs.logits
-        else:
-            # Label smoothed loss like REBEL
+            # Standard loss - let T5 handle everything
             outputs = self.model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                use_cache=False,
+                labels=labels,
+                return_dict=True
+            )
+            loss = outputs.loss
+            logits = outputs.logits
+        else:
+            # Label smoothing - still let T5 create decoder_input_ids but compute custom loss
+            outputs = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=labels,  # T5 will create decoder_input_ids internally
                 return_dict=True
             )
             logits = outputs.logits
+            
+            # Apply label smoothing
             lprobs = torch.nn.functional.log_softmax(logits, dim=-1)
             
             # Replace -100 with pad_token_id for loss computation
@@ -194,7 +185,7 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         
         return {
             'loss': loss,
-            'logits': logits if 'logits' in locals() else outputs.logits
+            'logits': logits
         }
     
     def training_step(self, batch, batch_idx):
