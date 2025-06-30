@@ -8,10 +8,11 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import (
     T5ForConditionalGeneration, 
     T5Tokenizer,
-    AdamW,
     get_linear_schedule_with_warmup,
     DataCollatorForSeq2Seq
 )
+
+from torch.optim import AdamW
 from typing import Dict, List, Any
 import wandb
 
