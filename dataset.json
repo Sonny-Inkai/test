@@ -10,43 +10,33 @@
         "extracted_relations": "<LEGAL_PROVISION> Điều 3 01/2014/NQLT/CP-UBTƯMTTQVN <LEGAL_PROVISION> pháp luật về hòa giải ở cơ sở <Relates_To>"
     },
     "legal_3": {
-        "title": "Điều 4 01/2014/NQLT/CP-UBTƯMTTQVN", 
-        "input_text": "Điều 4 01/2014/NQLT/CP-UBTƯMTTQVN quy định về trách nhiệm của Bộ Tư pháp trong việc hướng dẫn và tổ chức thực hiện pháp luật về hòa giải ở cơ sở. Bộ Tư pháp chủ trì phối hợp với các cơ quan liên quan xây dựng và ban hành văn bản hướng dẫn thực hiện pháp luật về hòa giải ở cơ sở; hướng dẫn, tập huấn, bồi dưỡng nghiệp vụ hòa giải cho hòa giải viên và cán bộ làm công tác hòa giải ở cơ sở.",
-        "extracted_relations": "<LEGAL_PROVISION> Điều 4 01/2014/NQLT/CP-UBTƯMTTQVN <ORGANIZATION> Bộ Tư pháp <Relates_To> <ORGANIZATION> Bộ Tư pháp <LEGAL_PROVISION> pháp luật về hòa giải ở cơ sở <Applicable_In>"
+        "title": "Điều 5 Nghị định 15/2020/NĐ-CP",
+        "input_text": "Điều 5 Nghị định 15/2020/NĐ-CP quy định về tổ chức và hoạt động của Ủy ban nhân dân xã, phường, thị trấn. Ủy ban nhân dân có trách nhiệm thực hiện các nhiệm vụ được giao theo quy định của pháp luật và chỉ đạo của cấp trên. Chủ tịch Ủy ban nhân dân chịu trách nhiệm trước Hội đồng nhân dân và Ủy ban nhân dân cấp trên về việc thực hiện nhiệm vụ, quyền hạn được giao.",
+        "extracted_relations": "<LEGAL_PROVISION> Điều 5 Nghị định 15/2020/NĐ-CP <ORGANIZATION> Ủy ban nhân dân <Relates_To> <ORGANIZATION> Ủy ban nhân dân <ORGANIZATION> Hội đồng nhân dân <Relates_To>"
     },
     "legal_4": {
-        "title": "Điều 5 Nghị định 15/2020/NĐ-CP",
-        "input_text": "Nghị định này có hiệu lực thi hành kể từ ngày 15 tháng 3 năm 2020. Nghị định này thay thế Nghị định số 92/2017/NĐ-CP ngày 07 tháng 8 năm 2017 của Chính phủ quy định chi tiết thi hành một số điều của Luật Hòa giải ở cơ sở.",
-        "extracted_relations": "<LEGAL_PROVISION> Nghị định 15/2020/NĐ-CP <DATE/TIME> ngày 15 tháng 3 năm 2020 <Effective_From> <LEGAL_PROVISION> Nghị định 15/2020/NĐ-CP <LEGAL_PROVISION> Nghị định số 92/2017/NĐ-CP <Amended_By>"
+        "title": "Điều 10 Luật Doanh nghiệp 2020",
+        "input_text": "Điều 10 Luật Doanh nghiệp 2020 quy định về điều kiện thành lập doanh nghiệp tại Việt Nam. Doanh nghiệp được thành lập và hoạt động theo quy định của Luật này và các quy định khác của pháp luật có liên quan. Trụ sở chính của doanh nghiệp phải đặt tại lãnh thổ Việt Nam. Doanh nghiệp có quyền thành lập văn phòng đại diện, chi nhánh tại nước ngoài theo quy định của pháp luật Việt Nam và pháp luật nước sở tại.",
+        "extracted_relations": "<LEGAL_PROVISION> Điều 10 Luật Doanh nghiệp 2020 <LOCATION> Việt Nam <Applicable_In> <LEGAL_PROVISION> Luật Doanh nghiệp 2020 <ORGANIZATION> doanh nghiệp <Relates_To>"
     },
     "legal_5": {
-        "title": "Điều 6 về thẩm quyền",
-        "input_text": "Ủy ban nhân dân cấp tỉnh, thành phố trực thuộc Trung ương có trách nhiệm chỉ đạo, hướng dẫn Ủy ban nhân dân cấp huyện, cấp xã trong việc thực hiện các quy định của pháp luật về hòa giải ở cơ sở trên địa bàn tỉnh, thành phố trực thuộc Trung ương.",
-        "extracted_relations": "<ORGANIZATION> Ủy ban nhân dân cấp tỉnh <ORGANIZATION> Ủy ban nhân dân cấp huyện <Relates_To> <ORGANIZATION> Ủy ban nhân dân cấp tỉnh <LOCATION> địa bàn tỉnh, thành phố trực thuộc Trung ương <Applicable_In>"
+        "title": "Điều 15 Bộ luật Lao động 2019",
+        "input_text": "Điều 15 Bộ luật Lao động 2019 có hiệu lực từ ngày 01/01/2021, thay thế Bộ luật Lao động 2012. Bộ luật này quy định về quyền, nghĩa vụ, trách nhiệm của người lao động, người sử dụng lao động trong quan hệ lao động và các quan hệ khác liên quan trực tiếp đến quan hệ lao động tại Việt Nam. Nhà nước bảo đảm quyền tự do lao động, quyền được làm việc, quyền lựa chọn nghề nghiệp, nơi làm việc của công dân.",
+        "extracted_relations": "<LEGAL_PROVISION> Điều 15 Bộ luật Lao động 2019 <DATE/TIME> 01/01/2021 <Effective_From> <LEGAL_PROVISION> Bộ luật Lao động 2019 <LEGAL_PROVISION> Bộ luật Lao động 2012 <Amended_By> <LEGAL_PROVISION> Bộ luật Lao động 2019 <LOCATION> Việt Nam <Applicable_In>"
     },
     "legal_6": {
-        "title": "Điều 7 về việc báo cáo",
-        "input_text": "Các cơ quan, tổ chức có trách nhiệm báo cáo định kỳ hàng năm về tình hình thực hiện công tác hòa giải ở cơ sở về Ủy ban Trung ương Mặt trận Tổ quốc Việt Nam và Bộ Tư pháp theo quy định. Báo cáo phải được gửi trước ngày 31 tháng 12 hàng năm.",
-        "extracted_relations": "<ORGANIZATION> các cơ quan, tổ chức <ORGANIZATION> Ủy ban Trung ương Mặt trận Tổ quốc Việt Nam <Relates_To> <ORGANIZATION> các cơ quan, tổ chức <ORGANIZATION> Bộ Tư pháp <Relates_To> <ORGANIZATION> các cơ quan, tổ chức <DATE/TIME> ngày 31 tháng 12 hàng năm <Effective_From>"
+        "title": "Nghị định 52/2021/NĐ-CP",
+        "input_text": "Nghị định 52/2021/NĐ-CP của Chính phủ quy định chi tiết thi hành một số điều của Luật An toàn thông tin mạng. Nghị định này có hiệu lực từ ngày 01/10/2021 và áp dụng tại toàn bộ lãnh thổ Việt Nam. Bộ Thông tin và Truyền thông chịu trách nhiệm chỉ đạo, hướng dẫn, kiểm tra việc thực hiện Nghị định này.",
+        "extracted_relations": "<LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <LEGAL_PROVISION> Luật An toàn thông tin mạng <Relates_To> <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <DATE/TIME> 01/10/2021 <Effective_From> <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <LOCATION> Việt Nam <Applicable_In> <ORGANIZATION> Bộ Thông tin và Truyền thông <LEGAL_PROVISION> Nghị định 52/2021/NĐ-CP <Relates_To>"
     },
     "legal_7": {
-        "title": "Điều 8 về đào tạo",
-        "input_text": "Trung tâm đào tạo hòa giải viên thuộc Bộ Tư pháp có trách nhiệm xây dựng chương trình đào tạo, tập huấn cho hòa giải viên ở các địa phương trên toàn quốc. Chương trình đào tạo phải phù hợp với điều kiện thực tế của từng vùng miền.",
-        "extracted_relations": "<ORGANIZATION> Trung tâm đào tạo hòa giải viên <ORGANIZATION> Bộ Tư pháp <Relates_To> <ORGANIZATION> Trung tâm đào tạo hòa giải viên <LOCATION> các địa phương trên toàn quốc <Applicable_In>"
+        "title": "Thông tư 01/2022/TT-BTC",
+        "input_text": "Thông tư 01/2022/TT-BTC của Bộ Tài chính hướng dẫn thực hiện Nghị định 123/2020/NĐ-CP về quản lý, sử dụng tài sản công. Thông tư này có hiệu lực từ ngày 15/03/2022 và thay thế Thông tư 209/2016/TT-BTC. Các cơ quan, tổ chức, đơn vị sử dụng tài sản công phải thực hiện đúng quy định tại Thông tư này.",
+        "extracted_relations": "<LEGAL_PROVISION> Thông tư 01/2022/TT-BTC <ORGANIZATION> Bộ Tài chính <Relates_To> <LEGAL_PROVISION> Thông tư 01/2022/TT-BTC <LEGAL_PROVISION> Nghị định 123/2020/NĐ-CP <Relates_To> <LEGAL_PROVISION> Thông tư 01/2022/TT-BTC <DATE/TIME> 15/03/2022 <Effective_From> <LEGAL_PROVISION> Thông tư 01/2022/TT-BTC <LEGAL_PROVISION> Thông tư 209/2016/TT-BTC <Amended_By>"
     },
     "legal_8": {
-        "title": "Điều 9 về kinh phí",
-        "input_text": "Kinh phí hoạt động hòa giải ở cơ sở được bảo đảm từ ngân sách nhà nước theo phân cấp quản lý ngân sách hiện hành và các nguồn kinh phí hợp pháp khác theo quy định của pháp luật về ngân sách nhà nước.",
-        "extracted_relations": "<ORGANIZATION> ngân sách nhà nước <LEGAL_PROVISION> pháp luật về ngân sách nhà nước <Relates_To>"
-    },
-    "legal_9": {
-        "title": "Điều 10 về thanh tra, kiểm tra",
-        "input_text": "Thanh tra Bộ Tư pháp có trách nhiệm thanh tra, kiểm tra việc thực hiện các quy định của pháp luật về hòa giải ở cơ sở tại các địa phương theo kế hoạch thanh tra hàng năm và khi có yêu cầu đột xuất.",
-        "extracted_relations": "<ORGANIZATION> Thanh tra Bộ Tư pháp <LEGAL_PROVISION> pháp luật về hòa giải ở cơ sở <Relates_To> <ORGANIZATION> Thanh tra Bộ Tư pháp <LOCATION> các địa phương <Applicable_In>"
-    },
-    "legal_10": {
-        "title": "Điều 11 về xử lý vi phạm",
-        "input_text": "Cơ quan, tổ chức, cá nhân có hành vi vi phạm các quy định của Nghị định này thì tùy theo tính chất, mức độ vi phạm mà bị xử lý kỷ luật, xử phạt hành chính hoặc truy cứu trách nhiệm hình sự theo quy định của pháp luật.",
-        "extracted_relations": "<ORGANIZATION> Cơ quan, tổ chức, cá nhân <LEGAL_PROVISION> Nghị định này <Relates_To> <LEGAL_PROVISION> Nghị định này <LEGAL_PROVISION> pháp luật <Relates_To>"
+        "title": "Quyết định 123/2021/QĐ-TTg",
+        "input_text": "Quyết định 123/2021/QĐ-TTg của Thủ tướng Chính phủ phê duyệt Chiến lược phát triển kinh tế số Việt Nam đến năm 2025, định hướng đến năm 2030. Quyết định này có hiệu lực từ ngày ký và áp dụng trên toàn quốc. Bộ Kế hoạch và Đầu tư chủ trì, phối hợp với các bộ, ngành liên quan triển khai thực hiện Quyết định này.",
+        "extracted_relations": "<LEGAL_PROVISION> Quyết định 123/2021/QĐ-TTg <ORGANIZATION> Thủ tướng Chính phủ <Relates_To> <LEGAL_PROVISION> Quyết định 123/2021/QĐ-TTg <LOCATION> Việt Nam <Applicable_In> <LEGAL_PROVISION> Quyết định 123/2021/QĐ-TTg <DATE/TIME> 2025 <Relates_To> <ORGANIZATION> Bộ Kế hoạch và Đầu tư <LEGAL_PROVISION> Quyết định 123/2021/QĐ-TTg <Relates_To>"
     }
 } 
