@@ -362,7 +362,7 @@ def main():
         'data_path': "/kaggle/input/vietnamese-legal-finetune-dataset",
         'finetune_file_name': "dataset.json",
         'model_name': "VietAI/vit5-base",
-        'batch_size': 16,
+        'batch_size': 8,
         'learning_rate': 3e-4,
         'max_epochs': 10,
         'max_steps': 10000,
@@ -371,7 +371,7 @@ def main():
         'max_target_length': 256,
         'weight_decay': 0.01,
         'gradient_clip_val': 1.0,
-        'accumulate_grad_batches': 2,
+        'accumulate_grad_batches': 4,
         'precision': 16,  # Mixed precision
         'num_workers': 2
     }
