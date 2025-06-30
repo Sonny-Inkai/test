@@ -76,6 +76,8 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         warmup_steps: int = 1000,
         max_steps: int = 10000,
         weight_decay: float = 0.01,
+        label_smoothing: float = 0.1,  # Add label smoothing like REBEL
+        ignore_pad_token_for_loss: bool = True,  # Add pad token ignoring
         domain_special_tokens: List[str] = None
     ):
         super().__init__()
@@ -105,39 +107,125 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         self.warmup_steps = warmup_steps
         self.max_steps = max_steps
         self.weight_decay = weight_decay
+        self.label_smoothing = label_smoothing
+        self.ignore_pad_token_for_loss = ignore_pad_token_for_loss
+        
+        # Set up loss function like REBEL
+        if self.label_smoothing == 0:
+            self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-100)
+        else:
+            # Will use label smoothed loss manually
+            self.loss_fn = None
         
         # For tracking
         self.training_step_outputs = []
         self.validation_step_outputs = []
     
+    def label_smoothed_nll_loss(self, lprobs, target, epsilon, ignore_index=-100):
+        """Label smoothed loss function adapted from REBEL"""
+        if target.dim() == lprobs.dim() - 1:
+            target = target.unsqueeze(-1)
+        nll_loss = -lprobs.gather(dim=-1, index=target)
+        smooth_loss = -lprobs.sum(dim=-1, keepdim=True)
+        if ignore_index is not None:
+            pad_mask = target.eq(ignore_index)
+            nll_loss.masked_fill_(pad_mask, 0.0)
+            smooth_loss.masked_fill_(pad_mask, 0.0)
+        else:
+            nll_loss = nll_loss.squeeze(-1)
+            smooth_loss = smooth_loss.squeeze(-1)
+
+        nll_loss = nll_loss.sum()
+        smooth_loss = smooth_loss.sum()
+        eps_i = epsilon / lprobs.size(-1)
+        loss = (1.0 - epsilon) * nll_loss + eps_i * smooth_loss
+        return loss, nll_loss
+
     def forward(self, input_ids, attention_mask, labels=None):
-        return self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            labels=labels
-        )
+        """Forward pass with proper loss computation like REBEL"""
+        if labels is None:
+            return self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask
+            )
+        
+        # Proper loss computation like REBEL
+        if self.label_smoothing == 0:
+            if self.ignore_pad_token_for_loss:
+                # Manual loss computation ignoring pad tokens
+                outputs = self.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    use_cache=False,
+                    return_dict=True
+                )
+                logits = outputs.logits
+                loss = self.loss_fn(logits.view(-1, logits.shape[-1]), labels.view(-1))
+            else:
+                # Use model's built-in loss
+                outputs = self.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    labels=labels,
+                    use_cache=False,
+                    return_dict=True
+                )
+                loss = outputs.loss
+                logits = outputs.logits
+        else:
+            # Label smoothed loss like REBEL
+            outputs = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                use_cache=False,
+                return_dict=True
+            )
+            logits = outputs.logits
+            lprobs = torch.nn.functional.log_softmax(logits, dim=-1)
+            
+            # Replace -100 with pad_token_id for loss computation
+            labels_for_loss = labels.clone()
+            labels_for_loss.masked_fill_(labels_for_loss == -100, self.tokenizer.pad_token_id)
+            
+            loss, _ = self.label_smoothed_nll_loss(
+                lprobs, labels_for_loss, self.label_smoothing, 
+                ignore_index=self.tokenizer.pad_token_id
+            )
+        
+        return {
+            'loss': loss,
+            'logits': logits if 'logits' in locals() else outputs.logits
+        }
     
     def training_step(self, batch, batch_idx):
+        # Prepare labels like REBEL - but T5 doesn't need shift_tokens_left
+        labels = batch['labels'].clone()
+        
+        # For T5, we don't need to create decoder_input_ids explicitly
+        # T5 handles this internally
         outputs = self.forward(
             input_ids=batch['input_ids'],
             attention_mask=batch['attention_mask'],
-            labels=batch['labels']
+            labels=labels
         )
         
-        loss = outputs.loss
+        loss = outputs['loss']
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         
         self.training_step_outputs.append(loss.detach())
         return loss
     
     def validation_step(self, batch, batch_idx):
+        # Same proper loss computation for validation
+        labels = batch['labels'].clone()
+        
         outputs = self.forward(
             input_ids=batch['input_ids'],
             attention_mask=batch['attention_mask'],
-            labels=batch['labels']
+            labels=labels
         )
         
-        loss = outputs.loss
+        loss = outputs['loss']
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
         
         self.validation_step_outputs.append(loss.detach())
@@ -373,7 +461,10 @@ def main():
         'gradient_clip_val': 1.0,
         'accumulate_grad_batches': 4,
         'precision': 16,  # Mixed precision
-        'num_workers': 2
+        'num_workers': 2,
+        # REBEL-style loss improvements
+        'label_smoothing': 0.1,  # Label smoothing like REBEL
+        'ignore_pad_token_for_loss': True  # Ignore padding tokens in loss
     }
     
     # Special tokens for Vietnamese legal domain
@@ -403,6 +494,8 @@ def main():
         warmup_steps=config['warmup_steps'],
         max_steps=config['max_steps'],
         weight_decay=config['weight_decay'],
+        label_smoothing=config.get('label_smoothing', 0.1),  # Add label smoothing
+        ignore_pad_token_for_loss=config.get('ignore_pad_token_for_loss', True),
         domain_special_tokens=domain_special_tokens
     )
     
@@ -466,10 +559,11 @@ def main():
         gradient_clip_val=config['gradient_clip_val'],
         accumulate_grad_batches=config['accumulate_grad_batches'],
         callbacks=[checkpoint_callback, early_stopping],
-        val_check_interval=0.25,  # Check validation 4 times per epoch
-        log_every_n_steps=50,
+        val_check_interval=1.0,  # Check validation only at end of each epoch - FASTER!
+        log_every_n_steps=100,   # Reduce logging frequency
         enable_progress_bar=True,
-        enable_model_summary=True
+        enable_model_summary=True,
+        num_sanity_val_steps=2  # Only 2 sanity validation steps instead of default
     )
     
     print(f"\nTraining configuration:")
@@ -492,7 +586,9 @@ def main():
     print("\nTesting final model...")
     best_model = ViT5LegalExtractionModel.load_from_checkpoint(
         checkpoint_callback.best_model_path,
-        domain_special_tokens=domain_special_tokens
+        domain_special_tokens=domain_special_tokens,
+        label_smoothing=config.get('label_smoothing', 0.1),
+        ignore_pad_token_for_loss=config.get('ignore_pad_token_for_loss', True)
     )
     best_model.generate_sample()
 
