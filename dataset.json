@@ -1,0 +1,52 @@
+{
+    "legal_1": {
+        "title": "Điều 2 01/2014/NQLT/CP-UBTƯMTTQVN",
+        "input_text": "Điều 2 01/2014/NQLT/CP-UBTƯMTTQVN hướng dẫn phối hợp thực hiện một số quy định của pháp luật về hòa giải ở cơ sở Nguyên tắc phối hợp 1. Việc phối hợp hoạt động được thực hiện trên cơ sở chức năng, nhiệm vụ, quyền hạn, bảo đảm vai trò, trách nhiệm của mỗi cơ quan, tổ chức. 2. Phát huy vai trò nòng cốt của Mặt trận Tổ quốc Việt Nam và các tổ chức thành viên của Mặt trận; tăng cường tính chủ động, tích cực của mỗi cơ quan, tổ chức trong công tác hòa giải ở cơ sở. 3. Việc phối hợp phải thường xuyên, kịp thời, đồng bộ, chặt chẽ, thống nhất, đúng quy định của pháp luật.",
+        "extracted_relations": "<LEGAL_PROVISION> Điều 2 01/2014/NQLT/CP-UBTƯMTTQVN <ORGANIZATION> Mặt trận Tổ quốc Việt Nam <Relates_To>"
+    },
+    "legal_2": {
+        "title": "Điều 3 01/2014/NQLT/CP-UBTƯMTTQVN",
+        "input_text": "Điều 3 01/2014/NQLT/CP-UBTƯMTTQVN hướng dẫn phối hợp thực hiện một số quy định của pháp luật về hòa giải ở cơ sở Hướng dẫn và tổ chức thực hiện các quy định của pháp luật về hòa giải ở cơ sở Ủy ban Trung ương Mặt trận Tổ quốc Việt Nam, Ủy ban Mặt trận Tổ quốc Việt Nam các cấp ở địa phương đóng góp ý kiến về dự thảo văn bản hướng dẫn thực hiện pháp luật về hòa giải ở cơ sở theo đề nghị của Bộ Tư pháp, Ủy ban nhân dân cùng cấp; tổ chức thực hiện và hướng dẫn các tổ chức thành viên của Mặt trận tham gia theo dõi, đôn đốc việc thực hiện các quy định pháp luật về hòa giải ở cơ sở; phản ánh những khó khăn, vướng mắc trong quá trình tổ chức thực hiện với cơ quan nhà nước có thẩm quyền để được xem xét, giải quyết.",
+        "extracted_relations": "<LEGAL_PROVISION> Điều 3 01/2014/NQLT/CP-UBTƯMTTQVN <LEGAL_PROVISION> pháp luật về hòa giải ở cơ sở <Relates_To>"
+    },
+    "legal_3": {
+        "title": "Điều 4 01/2014/NQLT/CP-UBTƯMTTQVN", 
+        "input_text": "Điều 4 01/2014/NQLT/CP-UBTƯMTTQVN quy định về trách nhiệm của Bộ Tư pháp trong việc hướng dẫn và tổ chức thực hiện pháp luật về hòa giải ở cơ sở. Bộ Tư pháp chủ trì phối hợp với các cơ quan liên quan xây dựng và ban hành văn bản hướng dẫn thực hiện pháp luật về hòa giải ở cơ sở; hướng dẫn, tập huấn, bồi dưỡng nghiệp vụ hòa giải cho hòa giải viên và cán bộ làm công tác hòa giải ở cơ sở.",
+        "extracted_relations": "<LEGAL_PROVISION> Điều 4 01/2014/NQLT/CP-UBTƯMTTQVN <ORGANIZATION> Bộ Tư pháp <Relates_To> <ORGANIZATION> Bộ Tư pháp <LEGAL_PROVISION> pháp luật về hòa giải ở cơ sở <Applicable_In>"
+    },
+    "legal_4": {
+        "title": "Điều 5 Nghị định 15/2020/NĐ-CP",
+        "input_text": "Nghị định này có hiệu lực thi hành kể từ ngày 15 tháng 3 năm 2020. Nghị định này thay thế Nghị định số 92/2017/NĐ-CP ngày 07 tháng 8 năm 2017 của Chính phủ quy định chi tiết thi hành một số điều của Luật Hòa giải ở cơ sở.",
+        "extracted_relations": "<LEGAL_PROVISION> Nghị định 15/2020/NĐ-CP <DATE/TIME> ngày 15 tháng 3 năm 2020 <Effective_From> <LEGAL_PROVISION> Nghị định 15/2020/NĐ-CP <LEGAL_PROVISION> Nghị định số 92/2017/NĐ-CP <Amended_By>"
+    },
+    "legal_5": {
+        "title": "Điều 6 về thẩm quyền",
+        "input_text": "Ủy ban nhân dân cấp tỉnh, thành phố trực thuộc Trung ương có trách nhiệm chỉ đạo, hướng dẫn Ủy ban nhân dân cấp huyện, cấp xã trong việc thực hiện các quy định của pháp luật về hòa giải ở cơ sở trên địa bàn tỉnh, thành phố trực thuộc Trung ương.",
+        "extracted_relations": "<ORGANIZATION> Ủy ban nhân dân cấp tỉnh <ORGANIZATION> Ủy ban nhân dân cấp huyện <Relates_To> <ORGANIZATION> Ủy ban nhân dân cấp tỉnh <LOCATION> địa bàn tỉnh, thành phố trực thuộc Trung ương <Applicable_In>"
+    },
+    "legal_6": {
+        "title": "Điều 7 về việc báo cáo",
+        "input_text": "Các cơ quan, tổ chức có trách nhiệm báo cáo định kỳ hàng năm về tình hình thực hiện công tác hòa giải ở cơ sở về Ủy ban Trung ương Mặt trận Tổ quốc Việt Nam và Bộ Tư pháp theo quy định. Báo cáo phải được gửi trước ngày 31 tháng 12 hàng năm.",
+        "extracted_relations": "<ORGANIZATION> các cơ quan, tổ chức <ORGANIZATION> Ủy ban Trung ương Mặt trận Tổ quốc Việt Nam <Relates_To> <ORGANIZATION> các cơ quan, tổ chức <ORGANIZATION> Bộ Tư pháp <Relates_To> <ORGANIZATION> các cơ quan, tổ chức <DATE/TIME> ngày 31 tháng 12 hàng năm <Effective_From>"
+    },
+    "legal_7": {
+        "title": "Điều 8 về đào tạo",
+        "input_text": "Trung tâm đào tạo hòa giải viên thuộc Bộ Tư pháp có trách nhiệm xây dựng chương trình đào tạo, tập huấn cho hòa giải viên ở các địa phương trên toàn quốc. Chương trình đào tạo phải phù hợp với điều kiện thực tế của từng vùng miền.",
+        "extracted_relations": "<ORGANIZATION> Trung tâm đào tạo hòa giải viên <ORGANIZATION> Bộ Tư pháp <Relates_To> <ORGANIZATION> Trung tâm đào tạo hòa giải viên <LOCATION> các địa phương trên toàn quốc <Applicable_In>"
+    },
+    "legal_8": {
+        "title": "Điều 9 về kinh phí",
+        "input_text": "Kinh phí hoạt động hòa giải ở cơ sở được bảo đảm từ ngân sách nhà nước theo phân cấp quản lý ngân sách hiện hành và các nguồn kinh phí hợp pháp khác theo quy định của pháp luật về ngân sách nhà nước.",
+        "extracted_relations": "<ORGANIZATION> ngân sách nhà nước <LEGAL_PROVISION> pháp luật về ngân sách nhà nước <Relates_To>"
+    },
+    "legal_9": {
+        "title": "Điều 10 về thanh tra, kiểm tra",
+        "input_text": "Thanh tra Bộ Tư pháp có trách nhiệm thanh tra, kiểm tra việc thực hiện các quy định của pháp luật về hòa giải ở cơ sở tại các địa phương theo kế hoạch thanh tra hàng năm và khi có yêu cầu đột xuất.",
+        "extracted_relations": "<ORGANIZATION> Thanh tra Bộ Tư pháp <LEGAL_PROVISION> pháp luật về hòa giải ở cơ sở <Relates_To> <ORGANIZATION> Thanh tra Bộ Tư pháp <LOCATION> các địa phương <Applicable_In>"
+    },
+    "legal_10": {
+        "title": "Điều 11 về xử lý vi phạm",
+        "input_text": "Cơ quan, tổ chức, cá nhân có hành vi vi phạm các quy định của Nghị định này thì tùy theo tính chất, mức độ vi phạm mà bị xử lý kỷ luật, xử phạt hành chính hoặc truy cứu trách nhiệm hình sự theo quy định của pháp luật.",
+        "extracted_relations": "<ORGANIZATION> Cơ quan, tổ chức, cá nhân <LEGAL_PROVISION> Nghị định này <Relates_To> <LEGAL_PROVISION> Nghị định này <LEGAL_PROVISION> pháp luật <Relates_To>"
+    }
+} 
