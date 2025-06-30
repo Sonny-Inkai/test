@@ -105,6 +105,20 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         print(f"Tokenizer pad_token_id: {self.tokenizer.pad_token_id}")
         print(f"Tokenizer eos_token_id: {self.tokenizer.eos_token_id}")
         
+        # DEBUG: Check special token IDs
+        for token in domain_special_tokens:
+            token_id = self.tokenizer.convert_tokens_to_ids(token)
+            print(f"Special token '{token}' -> ID: {token_id}")
+        
+        # Test tokenization of sample relation
+        test_relation = "<LEGAL_PROVISION> Điều 2 01/2014/NQLT/CP-UBTƯMTTQVN <ORGANIZATION> Mặt trận Tổ quốc Việt Nam <Relates_To>"
+        encoded = self.tokenizer.encode(test_relation)
+        decoded = self.tokenizer.decode(encoded)
+        print(f"TEST TOKENIZATION:")
+        print(f"Original: {test_relation}")
+        print(f"Encoded IDs: {encoded}")
+        print(f"Decoded: {decoded}")
+        
         # Load model and resize embeddings
         self.model = T5ForConditionalGeneration.from_pretrained(model_name)
         self.model.resize_token_embeddings(len(self.tokenizer))
@@ -145,7 +159,7 @@ class ViT5LegalExtractionModel(pl.LightningModule):
         return loss, nll_loss
 
     def forward(self, input_ids, attention_mask, labels=None):
-        """Simple T5 forward pass - let T5 handle everything first"""
+        """T5 forward pass with optional label smoothing for regularization"""
         if labels is None:
             # Generation mode
             return self.model(
@@ -153,22 +167,54 @@ class ViT5LegalExtractionModel(pl.LightningModule):
                 attention_mask=attention_mask
             )
         
-        # Training mode - use T5's built-in loss computation
-        outputs = self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            labels=labels,
-            return_dict=True
-        )
+        # Training mode 
+        if self.label_smoothing == 0:
+            # Use T5's built-in loss computation
+            outputs = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=labels,
+                return_dict=True
+            )
+            loss = outputs.loss
+        else:
+            # Label smoothing for regularization
+            outputs = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=labels,
+                return_dict=True
+            )
+            logits = outputs.logits
+            
+            # Apply label smoothing
+            lprobs = torch.nn.functional.log_softmax(logits, dim=-1)
+            
+            # Handle -100 labels (padding)
+            labels_for_loss = labels.clone()
+            labels_for_loss.masked_fill_(labels_for_loss == -100, self.tokenizer.pad_token_id)
+            
+            loss, _ = self.label_smoothed_nll_loss(
+                lprobs, labels_for_loss, self.label_smoothing, 
+                ignore_index=self.tokenizer.pad_token_id
+            )
         
         return {
-            'loss': outputs.loss,
+            'loss': loss,
             'logits': outputs.logits
         }
     
     def training_step(self, batch, batch_idx):
         # Prepare labels like REBEL - but T5 doesn't need shift_tokens_left
         labels = batch['labels'].clone()
+        
+        # DEBUG: Print sample training data occasionally
+        if batch_idx == 0 and self.trainer.is_global_zero:
+            sample_input = self.tokenizer.decode(batch['input_ids'][0], skip_special_tokens=False)
+            sample_target = self.tokenizer.decode(batch['labels'][0], skip_special_tokens=False)
+            print(f"\n🔍 TRAINING SAMPLE DEBUG:")
+            print(f"Input: {sample_input[:200]}...")
+            print(f"Target: {sample_target}")
         
         # For T5, we don't need to create decoder_input_ids explicitly
         # T5 handles this internally
@@ -341,23 +387,27 @@ class ViT5LegalExtractionModel(pl.LightningModule):
             ).to(self.device)
             
             with torch.no_grad():
+                # DEBUG: Try simpler generation first
                 generated_ids = self.model.generate(
                     input_ids=inputs['input_ids'],
                     attention_mask=inputs['attention_mask'],
                     max_length=256,
-                    min_length=10,
-                    num_beams=4,
-                    early_stopping=True,
+                    min_length=20,  # Force longer generation
+                    num_beams=1,    # Greedy search first
                     do_sample=False,
-                    no_repeat_ngram_size=2,  # Prevent repetition
-                    repetition_penalty=1.2,   # Penalize repetition
-                    length_penalty=1.0,
                     pad_token_id=self.tokenizer.pad_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    decoder_start_token_id=self.tokenizer.pad_token_id,  # T5 specific
+                    forced_bos_token_id=None  # T5 doesn't use BOS
                 )
             
             generated_text = self.tokenizer.decode(generated_ids[0], skip_special_tokens=False)
             generated_text = generated_text.replace('<pad>', '').replace('</s>', '').strip()
+            
+            # DEBUG: Show generation details
+            print(f"🔍 GENERATION DEBUG:")
+            print(f"Generated token IDs: {generated_ids[0].tolist()}")
+            print(f"Raw generated text: '{generated_text}'")
             
             print(f"\n🎯 EXPECTED: {expected}")
             print(f"🤖 GENERATED: {generated_text}")
@@ -429,20 +479,20 @@ def main():
         'data_path': "/kaggle/input/vietnamese-legal-finetune-dataset",
         'finetune_file_name': "dataset.json",
         'model_name': "VietAI/vit5-base",
-        'batch_size': 8,
-        'learning_rate': 5e-5,  # Lower LR - T5 needs smaller LR than BART
+        'batch_size': 4,  # Smaller batch size to prevent overfitting
+        'learning_rate': 1e-5,  # Much lower LR - prevent overfitting
         'max_epochs': 10,
         'max_steps': 10000,
         'warmup_steps': 1000,
         'max_source_length': 512,
         'max_target_length': 256,
-        'weight_decay': 0.01,
+        'weight_decay': 0.1,  # Higher weight decay to prevent overfitting
         'gradient_clip_val': 1.0,
         'accumulate_grad_batches': 4,
         'precision': 16,  # Mixed precision
         'num_workers': 2,
-        # Start simple - add complexity later
-        'label_smoothing': 0.0,  # Disable label smoothing first
+        # Add back label smoothing to prevent overfitting
+        'label_smoothing': 0.05,  # Small label smoothing to prevent overfitting
         'ignore_pad_token_for_loss': True
     }
     
@@ -524,8 +574,9 @@ def main():
     early_stopping = EarlyStopping(
         monitor='val_loss',
         mode='min',
-        patience=3,
-        verbose=True
+        patience=2,  # Earlier stopping to prevent overfitting
+        verbose=True,
+        min_delta=0.001  # More sensitive to changes
     )
     
     # Trainer with fixed GPU configuration for newer PyTorch Lightning
