@@ -1,376 +1,350 @@
-import os
 import json
+import os
 import torch
-import numpy as np
-import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import Dataset, DataLoader
 from transformers import (
-    AutoConfig,
-    AutoTokenizer,
-    AutoModelForSeq2SeqLM,
-    T5ForConditionalGeneration,
-    DataCollatorForSeq2Seq,
+    T5ForConditionalGeneration, 
+    T5Tokenizer,
+    AdamW,
     get_linear_schedule_with_warmup,
-    get_cosine_schedule_with_warmup
+    DataCollatorForSeq2Seq
 )
+from typing import Dict, List, Any
+import wandb
 
-# Define custom dataset
+# Domain-specific special tokens for Vietnamese legal documents
+DOMAIN_SPECIAL_TOKENS = [
+    "<ORGANIZATION>", "<LOCATION>", "<DATE/TIME>", "<LEGAL_PROVISION>",
+    "<Effective_From>", "<Applicable_In>", "<Relates_To>", "<Amended_By>"
+]
+
 class VietnameseLegalDataset(Dataset):
-    def __init__(self, data, tokenizer, max_source_length, max_target_length, prefix=""):
-        self.data = data
+    def __init__(self, data_path: str, filename: str, tokenizer, max_length: int = 512):
         self.tokenizer = tokenizer
-        self.max_source_length = max_source_length
-        self.max_target_length = max_target_length
-        self.prefix = prefix
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        item = self.data[idx]
-        input_text = self.prefix + item["input_text"]
-        target_text = item["extracted_relations"]
+        self.max_length = max_length
         
-        source = self.tokenizer(
-            input_text,
-            max_length=self.max_source_length,
-            padding="max_length",
+        # Load data
+        file_path = os.path.join(data_path, filename)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.data = json.load(f)
+        
+        # Convert to list format
+        self.examples = []
+        for key, value in self.data.items():
+            self.examples.append({
+                'input_text': value['input_text'],
+                'extracted_relations': value['extracted_relations']
+            })
+    
+    def __len__(self):
+        return len(self.examples)
+    
+    def __getitem__(self, idx):
+        example = self.examples[idx]
+        
+        # Tokenize input
+        input_encoding = self.tokenizer(
+            example['input_text'],
+            max_length=self.max_length,
+            padding='max_length',
             truncation=True,
-            return_tensors="pt",
+            return_tensors='pt'
         )
         
-        with self.tokenizer.as_target_tokenizer():
-            target = self.tokenizer(
-                target_text,
-                max_length=self.max_target_length,
-                padding="max_length",
-                truncation=True,
-                return_tensors="pt",
-            )
-        
-        input_ids = source["input_ids"].squeeze()
-        attention_mask = source["attention_mask"].squeeze()
-        labels = target["input_ids"].squeeze()
-        
-        # Replace padding token id with -100 for loss calculation
-        labels[labels == self.tokenizer.pad_token_id] = -100
+        # Tokenize target
+        target_encoding = self.tokenizer(
+            example['extracted_relations'],
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
         
         return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "labels": labels,
-            "input_text": input_text,
-            "target_text": target_text
+            'input_ids': input_encoding['input_ids'].squeeze(),
+            'attention_mask': input_encoding['attention_mask'].squeeze(),
+            'labels': target_encoding['input_ids'].squeeze()
         }
 
-# Extract triplets function for Vietnamese legal text
-def extract_triplets_vietnamese(text, domain_special_tokens):
-    triplets = []
-    head_type, head_text, tail_type, tail_text, relation_type = '', '', '', '', ''
-    text = text.strip()
-    
-    # Get all tokens in the text
-    tokens = text.replace("<pad>", "").replace("</s>", "").replace("<s>", "").split()
-    
-    i = 0
-    while i < len(tokens):
-        token = tokens[i]
-        
-        # Check if token is a special token for head type
-        if token in domain_special_tokens:
-            head_type = token
-            i += 1
-            head_text = ''
-            
-            # Collect head text until we find another special token
-            while i < len(tokens) and tokens[i] not in domain_special_tokens:
-                head_text += ' ' + tokens[i]
-                i += 1
-            
-            if i < len(tokens):
-                # Found tail type token
-                tail_type = tokens[i]
-                i += 1
-                tail_text = ''
-                
-                # Collect tail text until we find another special token
-                while i < len(tokens) and tokens[i] not in domain_special_tokens:
-                    tail_text += ' ' + tokens[i]
-                    i += 1
-                
-                if i < len(tokens):
-                    # Found relation type token
-                    relation_type = tokens[i]
-                    
-                    # Add triplet to results
-                    if head_type and head_text and tail_type and tail_text and relation_type:
-                        triplets.append({
-                            'head_type': head_type.strip('<>'),
-                            'head': head_text.strip(),
-                            'tail_type': tail_type.strip('<>'),
-                            'tail': tail_text.strip(),
-                            'relation': relation_type.strip('<>')
-                        })
-                    
-                    # Reset for next triplet
-                    head_type, head_text, tail_type, tail_text, relation_type = '', '', '', '', ''
-        i += 1
-            
-    return triplets
-
-# Lightning Module for ViT5 model
-class ViT5RelationExtractionModule(pl.LightningModule):
-    def __init__(self, config, tokenizer, model, domain_special_tokens):
+class VietnameseLegalT5(pl.LightningModule):
+    def __init__(
+        self,
+        model_name: str = "VietAI/vit5-base",
+        learning_rate: float = 3e-4,
+        warmup_steps: int = 1000,
+        max_epochs: int = 10,
+        train_batch_size: int = 8,
+        eval_batch_size: int = 8,
+        **kwargs
+    ):
         super().__init__()
-        self.save_hyperparameters(ignore=["tokenizer", "model"])
-        self.config = config
-        self.tokenizer = tokenizer
-        self.model = model
-        self.domain_special_tokens = domain_special_tokens
+        self.save_hyperparameters()
         
-        # Define loss function
-        self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-100)
-    
+        # Initialize tokenizer and add special tokens
+        self.tokenizer = T5Tokenizer.from_pretrained(model_name)
+        self.tokenizer.add_special_tokens({'additional_special_tokens': DOMAIN_SPECIAL_TOKENS})
+        
+        # Initialize model
+        self.model = T5ForConditionalGeneration.from_pretrained(model_name)
+        self.model.resize_token_embeddings(len(self.tokenizer))
+        
+        self.learning_rate = learning_rate
+        self.warmup_steps = warmup_steps
+        
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            labels=labels,
-            return_dict=True
+            labels=labels
         )
         return outputs
     
     def training_step(self, batch, batch_idx):
-        outputs = self.forward(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
-            labels=batch["labels"]
+        outputs = self(
+            input_ids=batch['input_ids'],
+            attention_mask=batch['attention_mask'],
+            labels=batch['labels']
         )
+        
         loss = outputs.loss
-        self.log("train_loss", loss, prog_bar=True)
+        self.log('train_loss', loss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
-        outputs = self.forward(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
-            labels=batch["labels"]
+        outputs = self(
+            input_ids=batch['input_ids'],
+            attention_mask=batch['attention_mask'],
+            labels=batch['labels']
         )
+        
         loss = outputs.loss
-        self.log("val_loss", loss, prog_bar=True)
+        self.log('val_loss', loss, prog_bar=True, logger=True, on_step=False, on_epoch=True)
         
-        # Generate predictions for a few samples
-        if batch_idx == 0:
-            self._generate_and_log_predictions(batch)
-        
-        return loss
+        return {'val_loss': loss}
     
-    def _generate_and_log_predictions(self, batch):
-        input_ids = batch["input_ids"]
-        attention_mask = batch["attention_mask"]
-        
-        # Take only the first few examples to avoid cluttering logs
-        sample_size = min(3, input_ids.size(0))
-        input_ids = input_ids[:sample_size]
-        attention_mask = attention_mask[:sample_size]
-        
-        # Generate predictions
-        generated_ids = self.model.generate(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            max_length=128,
-            num_beams=4,
-            early_stopping=True
-        )
-        
-        # Decode predictions and original inputs/targets
-        generated_texts = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=False)
-        input_texts = batch["input_text"][:sample_size]
-        target_texts = batch["target_text"][:sample_size]
-        
-        # Log examples
-        for i, (input_text, target_text, generated_text) in enumerate(zip(input_texts, target_texts, generated_texts)):
-            self.logger.experiment.log({
-                f"example_{i}/input": input_text,
-                f"example_{i}/target": target_text,
-                f"example_{i}/prediction": generated_text
-            })
+    def generate_sample(self, input_text: str, max_length: int = 512):
+        """Generate relation extraction for a sample text"""
+        self.model.eval()
+        with torch.no_grad():
+            input_ids = self.tokenizer(
+                input_text,
+                return_tensors='pt',
+                max_length=max_length,
+                truncation=True,
+                padding=True
+            ).input_ids.to(self.device)
+            
+            outputs = self.model.generate(
+                input_ids,
+                max_length=max_length,
+                num_beams=4,
+                early_stopping=True,
+                do_sample=False
+            )
+            
+            decoded = self.tokenizer.decode(outputs[0], skip_special_tokens=False)
+            return decoded
     
     def configure_optimizers(self):
-        no_decay = ["bias", "LayerNorm.weight"]
-        optimizer_grouped_parameters = [
-            {
-                "params": [p for n, p in self.model.named_parameters() if not any(nd in n for nd in no_decay)],
-                "weight_decay": 0.01,
-            },
-            {
-                "params": [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)],
-                "weight_decay": 0.0,
-            },
-        ]
-        optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=self.hparams.config.learning_rate)
+        optimizer = AdamW(self.parameters(), lr=self.learning_rate)
         
-        # Define scheduler
-        scheduler = get_cosine_schedule_with_warmup(
+        # Calculate total steps for scheduler
+        total_steps = self.trainer.estimated_stepping_batches
+        warmup_steps = min(self.warmup_steps, total_steps // 10)
+        
+        scheduler = get_linear_schedule_with_warmup(
             optimizer,
-            num_warmup_steps=self.hparams.config.warmup_steps,
-            num_training_steps=self.hparams.config.max_steps
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_steps
         )
         
         return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "step",
-                "frequency": 1
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': scheduler,
+                'interval': 'step',
+                'frequency': 1
             }
         }
 
-# Callback to generate and log sample predictions during training
-class GenerateSamplesCallback(pl.Callback):
-    def __init__(self, every_n_steps=1000):
+class VietnameseLegalDataModule(pl.LightningDataModule):
+    def __init__(
+        self,
+        data_path: str,
+        filename: str,
+        tokenizer,
+        train_batch_size: int = 8,
+        eval_batch_size: int = 8,
+        max_length: int = 512,
+        train_val_split: float = 0.9
+    ):
         super().__init__()
-        self.every_n_steps = every_n_steps
+        self.data_path = data_path
+        self.filename = filename
+        self.tokenizer = tokenizer
+        self.train_batch_size = train_batch_size
+        self.eval_batch_size = eval_batch_size
+        self.max_length = max_length
+        self.train_val_split = train_val_split
+        
+    def setup(self, stage=None):
+        # Load full dataset
+        full_dataset = VietnameseLegalDataset(
+            self.data_path, 
+            self.filename, 
+            self.tokenizer, 
+            self.max_length
+        )
+        
+        # Split into train and validation
+        train_size = int(len(full_dataset) * self.train_val_split)
+        val_size = len(full_dataset) - train_size
+        
+        self.train_dataset, self.val_dataset = torch.utils.data.random_split(
+            full_dataset, [train_size, val_size]
+        )
+        
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.train_batch_size,
+            shuffle=True,
+            num_workers=2,
+            pin_memory=True
+        )
     
-    def on_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        if trainer.global_step % self.every_n_steps == 0:
-            pl_module._generate_and_log_predictions(batch)
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.eval_batch_size,
+            shuffle=False,
+            num_workers=2,
+            pin_memory=True
+        )
+
+class GenerationCallback(pl.Callback):
+    def __init__(self, sample_texts: List[str], every_n_epochs: int = 1):
+        self.sample_texts = sample_texts
+        self.every_n_epochs = every_n_epochs
+    
+    def on_validation_epoch_end(self, trainer, pl_module):
+        if trainer.current_epoch % self.every_n_epochs == 0:
+            print(f"\n=== Generation Samples at Epoch {trainer.current_epoch} ===")
+            
+            for i, text in enumerate(self.sample_texts):
+                generated = pl_module.generate_sample(text)
+                print(f"\nSample {i+1}:")
+                print(f"Input: {text[:100]}...")
+                print(f"Generated: {generated}")
+                
+                # Log to wandb if available
+                if hasattr(trainer.logger, 'experiment'):
+                    trainer.logger.experiment.log({
+                        f"sample_{i+1}_input": text[:100],
+                        f"sample_{i+1}_output": generated,
+                        "epoch": trainer.current_epoch
+                    })
 
 def main():
-    # Define configuration
-    class Config:
-        model_name = "VietAI/vit5-base"
-        learning_rate = 5e-5
-        warmup_steps = 500
-        max_steps = 10000
-        max_source_length = 512
-        max_target_length = 128
-        train_batch_size = 8
-        eval_batch_size = 8
-        gradient_accumulation_steps = 4
-        val_check_interval = 0.25  # Check validation every 1/4 epoch
-        
-    config = Config()
+    # Configuration
+    CONFIG = {
+        'model_name': "VietAI/vit5-base",
+        'data_path': "/kaggle/input/vietnamese-legal-finetune-dataset",
+        'filename': "dataset.json",
+        'learning_rate': 3e-4,
+        'train_batch_size': 4,  # Adjusted for T4x2
+        'eval_batch_size': 4,
+        'max_epochs': 10,
+        'max_length': 512,
+        'warmup_steps': 500,
+        'accumulate_grad_batches': 4,  # Effective batch size = 4 * 4 = 16
+        'precision': 16,  # Mixed precision for faster training
+        'gradient_clip_val': 1.0
+    }
     
-    # Define special tokens for Vietnamese legal domain
-    domain_special_tokens = [
-        "<ORGANIZATION>", "<LOCATION>", "<DATE/TIME>", "<LEGAL_PROVISION>",
-        "<Effective_From>", "<Applicable_In>",
-        "<Relates_To>", "<Amended_By>"
-    ]
-    
-    # Load tokenizer and add special tokens
-    tokenizer = AutoTokenizer.from_pretrained(config.model_name)
-    tokenizer.add_tokens(domain_special_tokens, special_tokens=True)
-    
-    # Load model
-    model = T5ForConditionalGeneration.from_pretrained(config.model_name)
-    model.resize_token_embeddings(len(tokenizer))
-    
-    # Load dataset
-    data_path = "/kaggle/input/vietnamese-legal-finetune-dataset"
-    finetune_file_name = "dataset.json"
-    
-    with open(os.path.join(data_path, finetune_file_name), 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
-    # Convert dictionary to list
-    data_list = []
-    for key, value in data.items():
-        data_list.append(value)
-    
-    # Split data into train and validation sets (90/10 split)
-    np.random.seed(42)
-    indices = np.random.permutation(len(data_list))
-    train_size = int(0.9 * len(data_list))
-    
-    train_data = [data_list[i] for i in indices[:train_size]]
-    val_data = [data_list[i] for i in indices[train_size:]]
-    
-    print(f"Train data size: {len(train_data)}")
-    print(f"Validation data size: {len(val_data)}")
-    
-    # Create datasets
-    train_dataset = VietnameseLegalDataset(
-        train_data, 
-        tokenizer, 
-        max_source_length=config.max_source_length, 
-        max_target_length=config.max_target_length
-    )
-    
-    val_dataset = VietnameseLegalDataset(
-        val_data, 
-        tokenizer, 
-        max_source_length=config.max_source_length, 
-        max_target_length=config.max_target_length
-    )
-    
-    # Create data loaders
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=config.train_batch_size,
-        shuffle=True,
-        num_workers=4
-    )
-    
-    val_dataloader = DataLoader(
-        val_dataset,
-        batch_size=config.eval_batch_size,
-        shuffle=False,
-        num_workers=4
-    )
+    # Set seed for reproducibility
+    pl.seed_everything(42)
     
     # Initialize model
-    pl_module = ViT5RelationExtractionModule(
-        config=config,
-        tokenizer=tokenizer,
-        model=model,
-        domain_special_tokens=domain_special_tokens
+    model = VietnameseLegalT5(
+        model_name=CONFIG['model_name'],
+        learning_rate=CONFIG['learning_rate'],
+        warmup_steps=CONFIG['warmup_steps'],
+        train_batch_size=CONFIG['train_batch_size'],
+        eval_batch_size=CONFIG['eval_batch_size']
     )
     
-    # Define callbacks
-    callbacks = [
-        ModelCheckpoint(
-            dirpath="checkpoints",
-            filename="vit5-legal-re-{epoch:02d}-{val_loss:.4f}",
-            save_top_k=3,
-            monitor="val_loss",
-            mode="min"
-        ),
-        EarlyStopping(
-            monitor="val_loss",
-            patience=3,
-            mode="min"
-        ),
-        LearningRateMonitor(logging_interval="step"),
-        GenerateSamplesCallback(every_n_steps=1000)
+    # Initialize data module
+    data_module = VietnameseLegalDataModule(
+        data_path=CONFIG['data_path'],
+        filename=CONFIG['filename'],
+        tokenizer=model.tokenizer,
+        train_batch_size=CONFIG['train_batch_size'],
+        eval_batch_size=CONFIG['eval_batch_size'],
+        max_length=CONFIG['max_length']
+    )
+    
+    # Sample texts for generation testing
+    sample_texts = [
+        "Điều 2 01/2014/NQLT/CP-UBTƯMTTQVN hướng dẫn phối hợp thực hiện một số quy định của pháp luật về hòa giải ở cơ sở",
+        "Ủy ban Trung ương Mặt trận Tổ quốc Việt Nam thực hiện nhiệm vụ theo quy định của pháp luật"
     ]
     
-    # Initialize logger
-    logger = WandbLogger(project="vietnamese-legal-relation-extraction", name="vit5-legal-re")
+    # Callbacks
+    callbacks = [
+        ModelCheckpoint(
+            monitor='val_loss',
+            dirpath='checkpoints/',
+            filename='vietnamese-legal-t5-{epoch:02d}-{val_loss:.2f}',
+            save_top_k=3,
+            mode='min'
+        ),
+        EarlyStopping(
+            monitor='val_loss',
+            patience=3,
+            mode='min'
+        ),
+        LearningRateMonitor(logging_interval='step'),
+        GenerationCallback(sample_texts, every_n_epochs=1)
+    ]
     
-    # Initialize trainer
-    trainer = pl.Trainer(
-        logger=logger,
-        callbacks=callbacks,
-        max_steps=config.max_steps,
-        val_check_interval=config.val_check_interval,
-        accumulate_grad_batches=config.gradient_accumulation_steps,
-        gpus=1,  # Use 1 GPU
-        precision=16,  # Use mixed precision for faster training
+    # Logger
+    logger = WandbLogger(
+        project="vietnamese-legal-relation-extraction",
+        name="vit5-legal-rebel"
     )
     
-    # Train model
-    trainer.fit(pl_module, train_dataloader, val_dataloader)
+    # Trainer
+    trainer = pl.Trainer(
+        max_epochs=CONFIG['max_epochs'],
+        accelerator='gpu',
+        devices=2,  # T4x2
+        strategy='ddp',  # Distributed training
+        precision=CONFIG['precision'],
+        accumulate_grad_batches=CONFIG['accumulate_grad_batches'],
+        gradient_clip_val=CONFIG['gradient_clip_val'],
+        callbacks=callbacks,
+        logger=logger,
+        log_every_n_steps=50,
+        val_check_interval=0.5,  # Validate twice per epoch
+    )
     
-    # Save the final model
-    pl_module.model.save_pretrained("final_model")
-    tokenizer.save_pretrained("final_model")
+    # Train
+    trainer.fit(model, data_module)
     
-    print("Training completed!")
+    # Test generation after training
+    print("\n=== Final Test Generation ===")
+    best_model_path = trainer.checkpoint_callback.best_model_path
+    if best_model_path:
+        best_model = VietnameseLegalT5.load_from_checkpoint(best_model_path)
+        for text in sample_texts:
+            result = best_model.generate_sample(text)
+            print(f"Input: {text}")
+            print(f"Generated: {result}")
+            print("-" * 50)
 
 if __name__ == "__main__":
-    main()
+    main() 
